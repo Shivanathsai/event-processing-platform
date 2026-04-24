@@ -1,0 +1,5 @@
+/Users/shivamittapalli/Downloads/event-platform/event-consumer/src/main/java/com/eventplatform/consumer/EventConsumerApplication.java
+/Users/shivamittapalli/Downloads/event-platform/event-consumer/src/main/java/com/eventplatform/consumer/config/KafkaConsumerConfig.java
+/Users/shivamittapalli/Downloads/event-platform/event-consumer/src/main/java/com/eventplatform/consumer/controller/EventQueryController.java
+/Users/shivamittapalli/Downloads/event-platform/event-consumer/src/main/java/com/eventplatform/consumer/repository/EventAggregateRepository.java
+/Users/shivamittapalli/Downloads/event-platform/event-consumer/src/main/java/com/eventplatform/consumer/service/EventConsumerService.java

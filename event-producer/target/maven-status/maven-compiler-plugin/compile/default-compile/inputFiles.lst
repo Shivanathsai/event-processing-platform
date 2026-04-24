@@ -1,0 +1,5 @@
+/Users/shivamittapalli/Downloads/event-platform/event-producer/src/main/java/com/eventplatform/producer/controller/EventController.java
+/Users/shivamittapalli/Downloads/event-platform/event-producer/src/main/java/com/eventplatform/producer/dto/EventRequest.java
+/Users/shivamittapalli/Downloads/event-platform/event-producer/src/main/java/com/eventplatform/producer/config/KafkaProducerConfig.java
+/Users/shivamittapalli/Downloads/event-platform/event-producer/src/main/java/com/eventplatform/producer/EventProducerApplication.java
+/Users/shivamittapalli/Downloads/event-platform/event-producer/src/main/java/com/eventplatform/producer/service/EventPublisherService.java

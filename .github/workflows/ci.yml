@@ -1,0 +1,156 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# GitHub Actions CI/CD — Real-Time Event Processing Platform
+#
+# Jobs:
+#   build-and-test  → Maven build, unit tests (TopologyTestDriver + EmbeddedKafka)
+#   integration-test → docker compose up, end-to-end event flow test
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  JAVA_VERSION: "21"
+
+jobs:
+
+  # ── Build & Unit Tests ──────────────────────────────────────────────────────
+  build-and-test:
+    name: Build & unit tests (Maven + TopologyTestDriver)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Build all modules
+        run: mvn clean compile -q
+
+      - name: Run unit tests
+        run: |
+          mvn test \
+            -pl event-common,event-processor,event-consumer \
+            --no-transfer-progress
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: "**/target/surefire-reports/*.xml"
+
+      - name: Check topology test coverage
+        run: |
+          echo "Verifying Kafka Streams topology tests ran..."
+          if find . -name "EventStreamTopologyTest.java" | xargs grep -l "TopologyTestDriver" | grep -q .; then
+            echo "TopologyTestDriver tests present ✓"
+          else
+            echo "ERROR: No TopologyTestDriver tests found"
+            exit 1
+          fi
+
+  # ── Integration Tests ───────────────────────────────────────────────────────
+  integration-test:
+    name: Integration test (Kafka + all services end-to-end)
+    runs-on: ubuntu-latest
+    needs: build-and-test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Build JAR artifacts
+        run: mvn clean package -DskipTests -q
+
+      - name: Start all services
+        run: docker compose up -d --build
+
+      - name: Wait for Kafka
+        run: |
+          echo "Waiting for Kafka..."
+          timeout 90 bash -c \
+            'until docker exec kafka kafka-broker-api-versions \
+               --bootstrap-server localhost:9092 >/dev/null 2>&1; \
+             do echo "."; sleep 3; done'
+          echo "Kafka ready ✓"
+
+      - name: Wait for all services healthy
+        run: |
+          timeout 120 bash -c \
+            'until curl -sf http://localhost:8081/api/v1/events/health && \
+                   curl -sf http://localhost:8082/actuator/health && \
+                   curl -sf http://localhost:8083/api/v1/health; \
+             do echo "Waiting for services..."; sleep 5; done'
+          echo "All services healthy ✓"
+
+      - name: Publish test events
+        run: |
+          # Publish 10 events via the producer REST API
+          for i in $(seq 1 10); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              -X POST http://localhost:8081/api/v1/events \
+              -H "Content-Type: application/json" \
+              -d "{\"type\":\"user.login\",\"source\":\"ci-test\",\"payload\":{\"i\":$i}}")
+            if [ "$STATUS" != "200" ]; then
+              echo "Event $i publish failed with HTTP $STATUS"
+              exit 1
+            fi
+          done
+          echo "10 events published successfully ✓"
+
+      - name: Publish batch events
+        run: |
+          PAYLOAD='[
+            {"type":"order.placed","source":"ci-test","payload":{"orderId":"1"}},
+            {"type":"order.placed","source":"ci-test","payload":{"orderId":"2"}},
+            {"type":"page.view","source":"ci-test","payload":{"page":"/home"}}
+          ]'
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST http://localhost:8081/api/v1/events/batch \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+          [ "$STATUS" = "200" ] && echo "Batch publish ✓" || (echo "Batch failed HTTP $STATUS"; exit 1)
+
+      - name: Verify consumer stats endpoint
+        run: |
+          # Give consumer time to process
+          sleep 10
+          STATS=$(curl -sf http://localhost:8083/api/v1/stats)
+          echo "Consumer stats: $STATS"
+          echo "$STATS" | grep -q "trackedEventTypes" && echo "Consumer stats endpoint ✓"
+
+      - name: Verify Prometheus metrics
+        run: |
+          sleep 5
+          curl -sf http://localhost:8081/actuator/prometheus | grep -q "kafka_events_published" \
+            && echo "Producer metrics ✓"
+          curl -sf http://localhost:8083/actuator/prometheus | grep -q "consumer_aggregates" \
+            && echo "Consumer metrics ✓"
+
+      - name: Print service logs on failure
+        if: failure()
+        run: |
+          docker compose logs event-producer  | tail -50
+          docker compose logs event-processor | tail -50
+          docker compose logs event-consumer  | tail -50
+
+      - name: Tear down
+        if: always()
+        run: docker compose down
