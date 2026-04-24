@@ -1,5 +1,0 @@
-com/eventplatform/consumer/EventConsumerApplication.class
-com/eventplatform/consumer/repository/EventAggregateRepository.class
-com/eventplatform/consumer/service/EventConsumerService.class
-com/eventplatform/consumer/config/KafkaConsumerConfig.class
-com/eventplatform/consumer/controller/EventQueryController.class

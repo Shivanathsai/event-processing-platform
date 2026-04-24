@@ -1,5 +1,0 @@
-com/eventplatform/producer/config/KafkaProducerConfig.class
-com/eventplatform/producer/dto/EventRequest.class
-com/eventplatform/producer/controller/EventController.class
-com/eventplatform/producer/EventProducerApplication.class
-com/eventplatform/producer/service/EventPublisherService.class

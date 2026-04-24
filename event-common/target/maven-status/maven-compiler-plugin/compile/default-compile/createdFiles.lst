@@ -1,5 +1,0 @@
-com/eventplatform/common/serialization/JsonSerde.class
-com/eventplatform/common/model/EventAggregate.class
-com/eventplatform/common/model/Alert$Severity.class
-com/eventplatform/common/model/Event.class
-com/eventplatform/common/model/Alert.class

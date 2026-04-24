@@ -1,3 +1,0 @@
-com/eventplatform/processor/topology/EventStreamTopology.class
-com/eventplatform/processor/EventProcessorApplication.class
-com/eventplatform/processor/config/KafkaStreamsConfig.class
