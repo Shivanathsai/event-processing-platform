@@ -79,6 +79,9 @@ jobs:
       - name: Build JAR artifacts
         run: mvn clean package -DskipTests -q
 
+      - name: Build JAR artifacts
+        run: mvn clean package -DskipTests -q
+
       - name: Start all services
         run: docker compose up -d --build
 
@@ -100,16 +103,28 @@ jobs:
              do echo "Waiting for services..."; sleep 5; done'
           echo "All services healthy ✓"
 
+      - name: Wait for Kafka topics
+        run: |
+          echo "Waiting for Kafka topics..."
+          sleep 20
+          timeout 60 bash -c 'until docker exec kafka kafka-topics --bootstrap-server localhost:9092 --list 2>/dev/null | grep -q events-raw; do echo "."; sleep 3; done'
+          echo "Kafka topics ready ✓"
+
       - name: Publish test events
         run: |
-          # Publish 10 events via the producer REST API
+          # Publish 10 events with retry (Kafka may still be warming up)
           for i in $(seq 1 10); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-              -X POST http://localhost:8081/api/v1/events \
-              -H "Content-Type: application/json" \
-              -d "{\"type\":\"user.login\",\"source\":\"ci-test\",\"payload\":{\"i\":$i}}")
+            for attempt in 1 2 3; do
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+                -X POST http://localhost:8081/api/v1/events \
+                -H "Content-Type: application/json" \
+                -d "{\"type\":\"user.login\",\"source\":\"ci-test\",\"payload\":{\"i\":$i}}")
+              [ "$STATUS" = "200" ] && break
+              echo "Event $i attempt $attempt: HTTP $STATUS, retrying in 3s..."
+              sleep 3
+            done
             if [ "$STATUS" != "200" ]; then
-              echo "Event $i publish failed with HTTP $STATUS"
+              echo "Event $i failed after 3 attempts: HTTP $STATUS"
               exit 1
             fi
           done
